@@ -1,0 +1,539 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+
+
+```{r}
+df <- read.csv('mxmh_survey_results.csv')
+print(df)
+```
+
+
+
+```{r}
+names (df)
+```
+
+```{r}
+# Renaming frequency features for a simpler data manipulation
+
+names(df)[12:27] <- c("FClassical", "FCountry", "FEDM", "FFolk", "FGospel", "FHipHop", 
+                      "FJazz", "FKpop", "FLatin", "FLofi", "FMetal", "FPop", 
+                      "FRnB", "FRap", "FRock", "FVGM")
+
+
+print(names(df))
+```
+
+
+```{r}
+library(ggplot2)
+ggplot(df, aes(x = Age, y = Hours.per.day )) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.7) +
+  labs(title = "Distribution des heures par jour en fonction de l'âge",
+       x = "Âge",
+       y = "Heures par jour") 
+
+```
+
+
+
+
+# CLEANING THE DATA 
+
+## Removing illogical values: 
+```{r}
+
+df <- subset(df, `Hours.per.day` != 24)
+print(df)
+
+```
+
+## Removing unuseful data
+
+```{r}
+df <- df[, -which(names(df) == "Timestamp")]
+df <- df[, -which(names(df) == "Permissions")]
+
+df <- df[ df$`Music.effects` != '', ]
+print(df)
+```
+
+
+
+```{r}
+df <- subset(df, !is.na(Age))
+print (df)
+```
+
+
+```{r}
+# Compter le nombre de valeurs NaN dans la colonne 'Hours.per.day'
+na_count <- sum(is.na(df))
+# Afficher le nombre de valeurs NaN
+print(na_count)
+```
+
+```{r}
+# removing BPM because there are many NA values in this speficic feature + we won't be considiring it in our analysis 
+df <- subset(df, select = -BPM)
+```
+
+
+# Visualizing our data:
+
+```{r}
+max_age <- max(df$Age, na.rm = TRUE)
+
+df$Age_Group <- cut(df$Age, breaks = seq(0, max_age + 10, by = 10))
+
+print(names(df))
+
+ggplot(df, aes(x = factor(Age_Group), fill = factor(Age_Group))) +
+  geom_bar(stat = "count", position = "dodge", alpha = 0.7) +
+  labs(title = "Distribution des heures par jour en fonction de la tranche d'âge",
+       x = "Tranche d'âge",
+       y = "Fréquence")
+
+```
+
+Based on this data, it's evident that the age groups most frequently engaged in listening to music are predominantly between 10 and 30 years old.
+
+
+```{r}
+effect_counts <- table(df$`Music.effects`)
+
+# Tracer un graphique à barres
+barplot(effect_counts, 
+        main = "Music effect", 
+        ylab = "Number of respondents")
+```
+
+This figure illustrates that the majority of individuals reported an improvement in their mental health due to music, with very few indicating that it worsened them.
+
+```{r}
+
+# Créer des intervalles personnalisés pour couvrir toutes les heures de 0 à 24
+custom_intervals <- seq(0, 24, by = 1)
+
+# Tracer un graphique à barres avec des intervalles personnalisés
+ggplot(df, aes(x = cut(`Hours.per.day`, breaks = custom_intervals))) +
+  geom_bar(width = 1, color = "black", fill = "blue") +
+  labs(x = "Number of hours", y = "Number of respondents", title = "Number of hours respondents who listen to music daily") +
+  scale_x_discrete(labels = custom_intervals) +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1))
+```
+
+The data indicates that a significant portion of respondents reported listening to music for durations ranging between 1 and 2 hours.
+
+```{r}
+frequency <- c('Never', 'Rarely', 'Sometimes', 'Very frequently')
+
+# subplot
+par(mfrow=c(4,4), mar=c(3, 3, 2, 1), oma=c(2, 2, 2, 2), cex.main=1.5)
+
+for (i in 10:25) {
+  column_name <- names(df)[i]
+  
+  # Tracer le graphique à barres
+  barplot(table(df[,column_name])[frequency], 
+          main=names(df)[i], 
+          ylim=c(0, 550), 
+          xlab=NULL, 
+          ylab="Number of respondents",
+          col="blue", 
+          border="black", 
+          axes=FALSE)
+  
+  axis(2, at=c(100, 300, 500))
+  
+  
+}
+```
+The figure above displays how often people listen to each type of music.
+
+```{r}
+# Set the overall plot layout
+par(mfrow=c(2, 2), mar=c(4, 4, 2, 1), oma=c(2, 2, 2, 2), cex.main=1.5)
+
+# Plot histograms for each mental health condition
+hist(df$Anxiety, main="Anxiety", yaxt="n", ylim=c(0, 100), xlab="Anxiety score")
+axis(2, at=c(0, 100))
+hist(df$Depression, main="Depression", yaxt="n", ylim=c(0, 100), xlab="Depression score")
+axis(2, at=c(0, 100))
+hist(df$Insomnia, main="Insomnia", yaxt="n", ylim=c(0, 250), xlab="Insomnia score")
+axis(2, at=c(0, 200))
+hist(df$OCD, main="OCD", yaxt="n", ylim=c(0, 300), xlab="OCD score")
+axis(2, at=c(0, 300))
+
+```
+
+LET'S GROUP THEM BY THEIR FAVORITE GENRE OF MUSIC
+
+```{r}
+names(df)
+```
+# Insomnia analysis:
+
+```{r}
+# Charger la bibliothèque dplyr pour les opérations de manipulation de données
+library(dplyr)
+
+# Calculer la moyenne de l'insomnie pour chaque genre de musique
+insomnia_music <- df %>%
+  group_by(`Fav.genre`) %>%
+  summarise(mean_insomnia = mean(Insomnia, na.rm = TRUE))
+
+# Tracer un graphique à barres de la moyenne de l'insomnie pour chaque genre de musique
+barplot(insomnia_music$mean_insomnia, 
+        names.arg = insomnia_music$`Fav.genre`,
+        xlab = "Favorite Genre",
+        ylab = "Mean Insomnia",
+        main = "Mean Insomnia by Favorite Genre",
+        col = "blue",
+        border = "black",
+        ylim = c(0, max(insomnia_music$mean_insomnia) * 1.1),
+        las = 2 # Orientation du texte sur l'axe x (2 pour vertical)
+        )
+
+
+```
+
+
+On average, respondents who like Rap most seem to report lower levels of insomnia, while those who favor Gospel music genre seem to report the highest levels of insomnia.
+
+# OCD analysis:
+
+```{r}
+# Calculer la moyenne de l'OCD pour chaque genre de musique
+ocd_music <- df %>%
+  group_by(`Fav.genre`) %>%
+  summarise(mean_ocd = mean(OCD, na.rm = TRUE))
+
+# Tracer un graphique à barres de la moyenne de l'OCD pour chaque genre de musique
+barplot(ocd_music$mean_ocd, 
+        names.arg = ocd_music$`Fav.genre`,
+        xlab = "Favorite Genre",
+        ylab = "Mean OCD",
+        main = "Mean OCD by Favorite Genre",
+        col = "blue",
+        border = "black",
+        ylim = c(0, max(ocd_music$mean_ocd) * 1.1),
+        las = 2 # Orientation du texte sur l'axe x (2 pour vertical)
+        )
+
+```
+Gospel music lovers tend to have the lowest OCD levels among all others which range at the same level (between 2 and 3)
+
+# Anxiety analysis 
+
+```{r}
+
+anxiety_music <- df %>%
+  group_by(`Fav.genre`) %>%
+  summarise(mean_anxiety = mean(Anxiety, na.rm = TRUE))
+
+# Tracer un graphique à barres de la moyenne de l'anxiété pour chaque genre de musique
+barplot(anxiety_music$mean_anxiety, 
+        names.arg = anxiety_music$`Fav.genre`,
+        xlab = "Favorite Genre",
+        ylab = "Mean Anxiety",
+        main = "Mean Anxiety by Favorite Genre",
+        col = "blue",
+        border = "black",
+        ylim = c(0, max(anxiety_music$mean_anxiety) * 1.1),
+        las = 2 # Orientation du texte sur l'axe x (2 pour vertical)
+        )
+
+```
+The figure above exhibits very similar levels of anxiety in all types of music
+
+# Depression analysis
+```{r}
+depression_music <- df %>%
+  group_by(`Fav.genre`) %>%
+  summarise(mean_depression = mean(Depression, na.rm = TRUE))
+
+# Tracer un graphique à barres de la moyenne de la dépression pour chaque genre de musique
+barplot(depression_music$mean_depression, 
+        names.arg = depression_music$`Fav.genre`,
+        xlab = "Favorite Genre",
+        ylab = "Mean Depression",
+        main = "Mean Depression by Favorite Genre",
+        col = "blue",
+        border = "black",
+        ylim = c(0, max(depression_music$mean_depression) * 1.1),
+        las = 2 # Orientation du texte sur l'axe x (2 pour vertical)
+        )
+
+```
+
+Again, Gospel and Rap music present the lowest depression rate while LOFI and  HIP HOP tend to be depressing for most of people
+
+# Relation between the 4 indicators of mental health ( OCD, Anxiety, Depression, Insomnia ) and the music effect
+
+```{r}
+library(ggplot2)
+library(tidyr)
+
+df_long <- pivot_longer(df, cols = c(Anxiety, Depression, Insomnia, OCD),
+                        names_to = "Measure", values_to = "Value")
+
+# Plotting
+ggplot(df_long, aes(x = Music.effects, y = Value, fill = Music.effects)) +
+  geom_boxplot() +
+  facet_wrap(~ Measure, scales = "free_y", nrow = 2) +
+  labs(x = "Music Effects", y = "Value", fill = "Music Effects") +
+  theme_minimal()
+```
+For depression and insomnia, it's evident from the boxplots that individuals indicating "worsen" for the music effect exhibit higher levels of insomnia and depression.
+
+The similarity of the boxplots for OCD and anxiety across different groups may indicate less variation in these variables among the "improve," "no effect," and "worsen" groups regarding the music effect. This suggests that OCD and anxiety may not be significant determining factors in predicting the music effect on individuals, at least in terms of observed variation in the data; let's verify this observation.
+
+The Kruskal-Wallis test is a non-parametric method used to compare the median values of three or more independent groups when the data violates the assumptions of parametric tests like ANOVA.
+
+## Kruskal-Wallis
+```{r}
+# Charger la bibliothèque pour Kruskal-Wallis
+library(ggpubr)
+
+# Effectuer le test de Kruskal-Wallis pour la variable OCD
+kruskal_test_OCD <- kruskal.test(Music.effects ~ OCD, data = df)
+kruskal_test_OCD
+
+# Effectuer le test de Kruskal-Wallis pour la variable anxiety
+kruskal_test_anxiety <- kruskal.test(Music.effects ~ Anxiety, data = df)
+kruskal_test_anxiety
+
+
+# Effectuer le test de Kruskal-Wallis pour la variable anxiety
+kruskal_test_depression <- kruskal.test(Music.effects ~ Depression, data = df)
+kruskal_test_depression
+
+```
+The Kruskal-Wallis chi-squared value is 15.329. This suggests that, within the sample, there is some variation in "Music.effects" based on "OCD".
+
+Since the p-value (0.2239) is higher than the commonly chosen significance threshold of 0.05, we do not have enough evidence to reject the null hypothesis. Thus, we conclude that there is no significant difference between the means of the groups for the variable "Music.effects" based on the variable "OCD".
+
+In other words, the levels of "OCD" do not appear to have a significant impact on the perception of the music effect ("Music.effects").
+
+The same analysis holds true for anxiety. However, for depression, the p-value is <0.05, indicating that depression and the music effect are related.
+
+#Classification with multiple classes for the target variable "Music.effects"
+
+##Decision Tree
+
+```{r}
+# Load required packages
+library(rpart)
+library(caret)
+
+# Set seed for reproducibility
+
+# Split the data into training and testing sets
+train_index <- createDataPartition(df$Music.effects, p = 0.8, list = FALSE)
+train_data <- df[train_index, ]
+test_data <- df[-train_index, ]
+
+# Train the decision tree model on the training data
+tree_model <- rpart(Music.effects ~ OCD + Anxiety + Depression + Insomnia, data = train_data, method = "class")
+
+# Predict the Music.effect for the testing data
+predicted_music_effect <- predict(tree_model, newdata = test_data, type = "class")
+
+# Evaluate the performance of the model
+confusion_matrix <- table(predicted_music_effect, test_data$Music.effect)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+
+# Display the confusion matrix and accuracy
+print(confusion_matrix)
+print(paste("Accuracy:", accuracy))
+
+
+```
+
+La matrice de confusion que vous avez fournie montre que le modèle n'a prédit aucune observation "Worsen" pour les données de test. Cela indiquer plus probablement un déséquilibre de classe dans nos données.
+
+L'accuracy de ce modèle semble être d'environ 76%, mais cela peut être trompeur vu que le déséquilibre de classe n'est pas pris en compte.
+
+Considérons d'autres mesures de performance, comme la précision, le rappel et le F1-score, qui prennent en compte le déséquilibre de classe.
+
+
+```{r}
+# Load required packages
+library(rpart)
+library(caret)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Split the data into training and testing sets
+train_index <- createDataPartition(df$Music.effects, p = 0.8, list = FALSE)
+train_data <- df[train_index, ]
+test_data <- df[-train_index, ]
+
+# Train the decision tree model on the training data
+tree_model <- rpart(Music.effects ~ OCD + Anxiety + Depression + Insomnia, data = train_data, method = "class")
+
+# Predict the Music.effects for the testing data
+predicted_music_effect <- predict(tree_model, newdata = test_data, type = "class")
+
+# Convert predicted_music_effect to a factor with levels same as test_data$Music.effects
+predicted_music_effect <- factor(predicted_music_effect, levels = levels(test_data$Music.effects))
+
+
+# Evaluate the performance of the model
+confusion_matrix <- confusionMatrix(predicted_music_effect, test_data$Music.effects)
+
+# Display the confusion matrix
+print(confusion_matrix)
+
+# Calculate recall for each class
+recall <- confusion_matrix$byClass["Sensitivity"]
+
+# Calculate F1-score for each class
+f1_score <- confusion_matrix$byClass["F1"]
+
+# Display recall and F1-score
+print(paste("Recall (Sensitivity):", recall))
+print(paste("F1-score:", f1_score))
+
+```
+D'aprés ces resultats, la sensibilité mesure la proportion de vrais positifs parmi tous les exemples positifs. 
+
+Pour la classe "Improve", la sensibilité est de 98.13%, mais pour la classe "No effect", elle est seulement de 6.06%. Cela indique que le modèle a du mal à détecter les exemples de la classe "No effect"
+
+L aprévalence est la proportion d'observations dans l'ensemble de données. La prévalence de la classe "Improve" est de 74.83%, tandis que celle de la classe "No effect" est de 23.08% et celle de la classe "Worsen" est de 2.10%. Ceci fait référence au déséquilibre dans notre data set 
+
+
+
+```{r}
+# Ensure Music.effects is a factor variable with correct levels
+df$Music.effects <- factor(df$Music.effects)
+
+# Load required packages
+library(DMwR)
+
+
+# Perform oversampling using SMOTE
+oversampled_df <- SMOTE(Music.effects ~ ., data = df, perc.over = 5, k = 2)
+
+# Check class distribution of oversampled dataset
+table(oversampled_df$Music.effects)
+
+
+```
+The persisting error may be due to the highly imablanced data. An alternative solution is to try class Weighting: assign higher weights to minority class samples
+
+## Random Forest with class weighting  
+
+```{r}
+# Load required packages
+library(randomForest)
+library(caret)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Ensure Music.effects is a factor variable with correct levels
+df$Music.effects <- factor(df$Music.effects)
+
+# Check the class weights vector
+table(class_weights)
+
+# Split the data into training and testing sets
+train_index <- createDataPartition(df$Music.effects, p = 0.8, list = FALSE)
+train_data <- df[train_index, ]
+test_data <- df[-train_index, ]
+
+
+# Train the random forest model on the training data with class weights
+
+rf_model <- randomForest(factor(Music.effects) ~ OCD + Anxiety + Depression + Insomnia, 
+                         data = train_data,
+                         classwt = list(Improve = 1, `No effect` = 2, Worsen = 10))
+
+levels(train_data$Music.effects)
+levels(test_data$Music.effects)
+
+# Predict the Music.effect for the testing data
+predicted_music_effect <- predict(rf_model, newdata = test_data)
+
+# Evaluate the performance of the model
+confusion_matrix <- table(predicted_music_effect, test_data$Music.effect)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+
+# Display the confusion matrix and accuracy
+print(confusion_matrix)
+print(paste("Accuracy:", accuracy))
+
+```
+
+## Multinomial Logistic Regression:
+
+La régression logistique multinomiale est une méthode appropriée pour ce type de problème (prediction à 3 niveaux ) car elle permet de prédire une variable catégorielle avec plusieurs niveaux.
+
+```{r}
+# Load the nnet package for multinomial logistic regression
+library(nnet)
+
+# Convert the target variable to a factor if it's not already
+df$Music.effects <- factor(df$Music.effects)
+
+# Split the data into training and test sets
+train_indices <- sample(1:nrow(df), 0.6 * nrow(df)) # 50% of the data for training
+train_data <- df[train_indices, ]
+test_data <- df[-train_indices, ]
+
+# Define class weights
+# Create a vector to hold class weights
+class_weights <- ifelse(train_data$Music.effects == "Worsen", 5,
+                        ifelse(train_data$Music.effects == "No effect", 2, 1))
+
+# Train the multinomial logistic regression model with adjusted sample weights
+model <- multinom(Music.effects ~ OCD + Insomnia + Depression + Anxiety, 
+                  data = train_data,
+                  weights = class_weights)
+
+# Make predictions on the test set
+predictions <- predict(model, newdata = test_data, type = "class")
+
+# Display the confusion matrix
+confusion_matrix <- table(test_data$Music.effects, predictions)
+print(confusion_matrix)
+
+# Calculate the accuracy of the model
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(paste("Accuracy:", accuracy))
+
+# Calculate balanced accuracy
+sensitivity <- diag(confusion_matrix) / rowSums(confusion_matrix)
+balanced_accuracy <- mean(sensitivity)
+
+# Calculate precision, recall, and F1-score
+precision <- diag(confusion_matrix) / colSums(confusion_matrix)
+recall <- sensitivity
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+# Print metrics
+print(paste("Balanced Accuracy:", balanced_accuracy))
+print("Precision:")
+print(precision)
+print("Recall (Sensitivity):")
+print(recall)
+print("F1-Score:")
+print(f1_score)
+
+# Explore resampling techniques, adjust class weights, and feature engineering as needed
+
+```
+Malgré l'assignation des poids, l'analyse révèle des biais persistants dus au déséquilibre dans la répartition des classes au sein du jeu de données.
+
+Le taux de précision équilibré, qui prend en compte la sensibilité (taux de vrais positifs) de chaque classe et les moyenne, est de 37,12%. Cette mesure offre une représentation plus précise de la performance du modèle, notamment dans les jeux de données déséquilibrés. Un taux de précision équilibré de 37,12% suggère que la performance du modèle est significativement affectée par le déséquilibre des classes.
+
